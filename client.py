@@ -15,7 +15,7 @@ class EchoBot(ClientXMPP):
         ClientXMPP.__init__(self, jid, password)
         super().__init__(jid, password)
 
-        self.add_event_handler("session_start", self.session_start)
+        self.add_event_handler("session_start", self.start)
         self.add_event_handler("message", self.message)
 
         # If you wanted more functionality, here's how to register plugins:
@@ -25,7 +25,7 @@ class EchoBot(ClientXMPP):
         # Here's how to access plugins once you've registered them:
         # self['xep_0030'].add_feature('echo_demo')
 
-    async def session_start(self, event):
+    async def start(self, event):
         self.send_presence()
         await self.get_roster()
 
@@ -38,7 +38,25 @@ class EchoBot(ClientXMPP):
             msg.reply("Thanks for sending:\n%s" % msg['body']).send()
 
 
+class Client(ClientXMPP):
+	def __init__(self, jid, password, recipient, msg):
+		super().__init__(jid, password)
+		
+		self.recipient = recipient
+		self.msg = msg
+		self.add_event_handler('session_start', self.session_start)
+	
+	async def session_start(self, event):
+		self.send_presence()
+		await self.get_roster()
+		
+		self.send_message(mto=self.recipient, mbody=self.msg)
+
 if __name__ == '__main__':
+
+    connection = False
+    opcion = input("1. Ingresar \n2. Registrarse \n3. Salir \n")
+    
     # Setup the command line arguments.
     parser = ArgumentParser(description=EchoBot.__doc__)
 
@@ -56,19 +74,33 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.jid is None:
-        args.jid = input("Username: ")
-        args.jid = args.jid + '@openfire.alumchat.xyz'
-
-    if args.password is None:
-        args.password = input("Password: ")
-
-    logging.basicConfig(level=args.loglevel, format='%(levelname)-8s %(message)s')
-
-    xmpp = EchoBot(args.jid, args.password)
-    xmpp.register_plugin('xep_0030') # Service Discovery
-    xmpp.register_plugin('xep_0199') # Ping
-
-    xmpp.connect()
-    xmpp.process(forever=True)
+    if opcion == "1" or opcion == 1:
+    	if args.jid is None:
+    		args.jid = input("Username: ")
+    		#args.jid = args.jid + '@alumchat.xyz'
+    		
+    	if args.password is None:
+    		args.password = getpass.getpass("Password: ")
+    		
+    	logging.basicConfig(level=args.loglevel, format='%(levelname)-8s %(message)s')
+    	if "bot" in args.jid:
+    		xmpp = EchoBot(args.jid, args.password)
+    		xmpp.register_plugin('xep_0030') # Service Discovery
+    		xmpp.register_plugin('xep_0199') # Ping
+    		xmpp.register_plugin('xep_0004')
+    		xmpp.register_plugin('xep_0060')
+    	else:
+    		messg = input("Ingrese mensaje")
+    		remit = input("Ingrese remitente")
+    		xmpp = Client(args.jid, args.password, remit, messg)
+    		xmpp.register_plugin('xep_0030') # Service Discovery
+    		xmpp.register_plugin('xep_0199') # Ping
+    		xmpp.register_plugin('xep_0004')
+    		xmpp.register_plugin('xep_0060')
+    		
+    	if xmpp.connect(('alumchat.xyz', 5222)):
+    		xmpp.process(block=True)
+    		print("Conexion exitosa")
+    	else:
+    		print("Error al conectarse")
 
