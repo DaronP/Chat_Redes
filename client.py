@@ -1,106 +1,165 @@
+from slixmpp import ClientXMPP, clientxmpp
 import sys
-import asyncio
 import logging
 import getpass
-from argparse import ArgumentParser
+import asyncio
 import slixmpp
+from slixmpp.exceptions import IqError, IqTimeout
 
 
-from slixmpp import ClientXMPP
+if sys.platform == 'win32':
+	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
-class EchoBot(ClientXMPP):
+class SignUp(slixmpp.ClientXMPP):
 
-    def __init__(self, jid, password):
-        ClientXMPP.__init__(self, jid, password)
-        super().__init__(jid, password)
+	def __init__(self, jid, password):
+		slixmpp.ClientXMPP.__init__(self, jid, password)
 
-        self.add_event_handler("session_start", self.start)
-        self.add_event_handler("message", self.message)
+		self.add_event_handler("session_start", self.start)
+		self.add_event_handler("register", self.register)
 
-        # If you wanted more functionality, here's how to register plugins:
-        # self.register_plugin('xep_0030') # Service Discovery
-        # self.register_plugin('xep_0199') # XMPP Ping
+	async def start(self, event):
+		self.send_presence()
+		await self.get_roster()
 
-        # Here's how to access plugins once you've registered them:
-        # self['xep_0030'].add_feature('echo_demo')
+		self.disconnect()
 
-    async def start(self, event):
-        self.send_presence()
-        await self.get_roster()
+	async def register(self, iq):
+		resp = self.Iq()
+		resp['type'] = 'set'
+		resp['register']['username'] = self.boundjid.user
+		resp['register']['password'] = self.password
+		try:
+			await resp.send()
+			print("Account created for %s!" % self.boundjid)
 
-        # Most get_*/set_* methods from plugins use Iq stanzas, which
-        # are sent asynchronously. You can almost always provide a
-        # callback that will be executed when the reply is received.
-
-    def message(self, msg):
-        if msg['type'] in ('chat', 'normal'):
-            msg.reply("Thanks for sending:\n%s" % msg['body']).send()
+		except IqError as e:
+			print("Could not register account: %s" %
+					e.iq['error']['text'])
+			self.disconnect()
+			
+		except IqTimeout:
+			print("No response from server.")
+			self.disconnect()
+		self.disconnect()
 
 
 class Client(ClientXMPP):
-	def __init__(self, jid, password, recipient, msg):
+	def __init__(self, jid, password):
 		super().__init__(jid, password)
+		self.jid = jid
+		self.password = password
+
+		self.register_plugin('xep_0030') # Service Discovery		
+		self.register_plugin('xep_0045') # Multi-User Chat
+		self.register_plugin('xep_0004')
+		self.register_plugin('xep_0060')
+		self.register_plugin('xep_0199') # Ping
 		
-		self.recipient = recipient
-		self.msg = msg
+		#self.recipient = recipient
+		#self.msg = msg
 		self.add_event_handler('session_start', self.session_start)
+		self.add_event_handler('receive_message', self.receive)
+		self.add_event_handler('message', self.message)
+
+	def receive(self, msg):
+		if msg['type'] == 'chat' or msg['type'] == 'normal':
+			print("***********Mensaje Recibido**************")
+			print("De: %(from)s \n %(body)s" %(msg))
+			print("*****************************************")
+
+	def message(self, msg):
+		if msg['type'] in ('chat', 'normal'):
+			msg.reply("Thanks for sending\n%(body)s" % msg).send()
+
 	
 	async def session_start(self, event):
 		self.send_presence()
 		await self.get_roster()
 		
-		self.send_message(mto=self.recipient, mbody=self.msg)
+		chat = True
+		while chat:
+			opcion = input("Holis")
+			if opcion == "1":
+
+				self.send_presence(pstatus='available')
+				#se realiza una actualizacion de los presence
+				print('Waiting for presence updates...\n')
+				await asyncio.sleep(10)
+				#aqui se procura el desplegar el roster de contatos en el server
+				#consta de varios loops que muestran los distintos detalles de los usuarios
+				print('Roster for %s' % self.boundjid.bare)
+				for i in self.roster:
+					for r in self.roster[i]:
+						print(r.split('@')[0])
+						for s in self.client_roster.presence(r):
+							print("    status: ", self.client_roster.presence(r)[s]['status'])
+
+
+			if opcion == "2":
+				usr = input("Ingrese usuario ")
+				usr = usr + "@alumchat.xyz"
+				xmpp.send_presence_subscription(pto=usr)
+				print("Usuario agregado")
+
+			if opcion == "3":
+				usr = input("Ingrese el usuario ")
+				usr = usr + "@alumchat.xyz"
+				print(self.client_roster.presence(usr))
+				y = self.client_roster
+				print(y[usr])
+			
+			if opcion == "4":
+				para = input("Ingrese el usuario ")
+				para = para + "@alumchat.xyz"
+				msg = input("Ingrese el mensaje ")
+
+				try:
+					self.send_message(mto=para, mbody=msg, mtype='chat')
+					print("Mensaje enviado")
+				except:
+					print("No se ha podido mandar el mensaje")
+		#self.send_message(mto=self.recipient, mbody=self.msg)
 
 if __name__ == '__main__':
 
-    connection = False
-    opcion = input("1. Ingresar \n2. Registrarse \n3. Salir \n")
-    
-    # Setup the command line arguments.
-    parser = ArgumentParser(description=EchoBot.__doc__)
+	connection = False
+	
 
-    # Output verbosity options.
-    parser.add_argument("-q", "--quiet", help="set logging to ERROR", action="store_const", dest="loglevel",
-    const=logging.ERROR, default=logging.INFO)
+	run = True
 
-    parser.add_argument("-d", "--debug", help="set logging to DEBUG", action="store_const", dest="loglevel",
-    const=logging.DEBUG, default=logging.INFO)
-
-    # JID and password options.
-    parser.add_argument("-j", "--jid", dest="jid", help="JID to use")
-
-    parser.add_argument("-p", "--password", dest="password", help="password to use")
-
-    args = parser.parse_args()
-
-    if opcion == "1" or opcion == 1:
-    	if args.jid is None:
-    		args.jid = input("Username: ")
-    		#args.jid = args.jid + '@alumchat.xyz'
-    		
-    	if args.password is None:
-    		args.password = getpass.getpass("Password: ")
-    		
-    	logging.basicConfig(level=args.loglevel, format='%(levelname)-8s %(message)s')
-    	if "bot" in args.jid:
-    		xmpp = EchoBot(args.jid, args.password)
-    		xmpp.register_plugin('xep_0030') # Service Discovery
-    		xmpp.register_plugin('xep_0199') # Ping
-    		xmpp.register_plugin('xep_0004')
-    		xmpp.register_plugin('xep_0060')
-    	else:
-    		messg = input("Ingrese mensaje")
-    		remit = input("Ingrese remitente")
-    		xmpp = Client(args.jid, args.password, remit, messg)
-    		xmpp.register_plugin('xep_0030') # Service Discovery
-    		xmpp.register_plugin('xep_0199') # Ping
-    		xmpp.register_plugin('xep_0004')
-    		xmpp.register_plugin('xep_0060')
-    		
-    	if xmpp.connect(('alumchat.xyz', 5222)):
-    		xmpp.process(block=True)
-    		print("Conexion exitosa")
-    	else:
-    		print("Error al conectarse")
+	while run:
+		opcion = input("1. Ingresar \n2. Registrarse \n3. Salir \n")
+		if opcion == "1" or opcion == 1:
+			jid = input("Username: ")
+			jid = jid + '@alumchat.xyz'
+			password = input("Password: ")
+				
+			xmpp = Client(jid, password)
+				
+			if xmpp.connect() == None:
+				f = xmpp.client_roster
+				xmpp.process()
+				
+			else:
+				print("Error al conectarse")
+		
+		if opcion == "2" or opcion == 2:
+			jid = input("Username: ")
+			jid = jid + '@alumchat.xyz'
+				
+			password = getpass.getpass("Password: ")
+			
+			xmpp = SignUp(jid, password)
+			xmpp.register_plugin('xep_0030') # Service Discovery
+			xmpp.register_plugin('xep_0004') # Data forms
+			xmpp.register_plugin('xep_0066') # Out-of-band Data
+			xmpp.register_plugin('xep_0077') # In-band Registration
+			xmpp['xep_0077'].force_registration = True
+			if xmpp.connect() == None:
+				xmpp.process()
+				print("Success")
+		if opcion == 3 or opcion == "3":
+			run = False
 
