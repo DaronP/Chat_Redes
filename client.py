@@ -61,34 +61,49 @@ class Client(ClientXMPP):
 		#self.msg = msg
 		self.add_event_handler('session_start', self.session_start)
 		self.add_event_handler('receive_message', self.receive)
+		self.add_event_handler('muc_receive', self.muc_receive)
 		self.add_event_handler('message', self.message)
+		self.add_event_handler('greeting', self.muc_greeting)
+		self.add_event_handler('muc_message', self.muc_message)
 
 	def receive(self, msg):
 		if msg['type'] == 'chat' or msg['type'] == 'normal':
 			print("***********Mensaje Recibido**************")
 			print("De: %(from)s \n %(body)s" %(msg))
 			print("*****************************************")
+	
+	def muc_receive(self, msg):
+		if msg['type'] == 'groupchat':
+			print("***********Mensaje grupal Recibido**************")
+			print("De: %(from)s \n %(body)s" %(msg))
+			print("************************************************")
 
 	def message(self, msg):
 		if msg['type'] in ('chat', 'normal'):
 			msg.reply("Thanks for sending\n%(body)s" % msg).send()
 
-	
+	def muc_greeting(self, presence):
+		if presence['muc']['nick'] != self.nick:
+			self.send_message(mto=presence['from'].bare, mbody="Bienvenido, %s %s" % (presence['muc']['role'], presence['muc']['nick']), mtype='groupchat')
+
+	def muc_message(self, room, msg):
+		try:
+			self.send_message(mto=room, mbody=msg, mtype='groupchat')
+		except IqError as e:
+			print("Error al mandar mensaje " ,e)
+
+		
 	async def session_start(self, event):
 		self.send_presence()
 		await self.get_roster()
 		
 		chat = True
 		while chat:
-			opcion = input("Holis")
+			opcion = input("Menu:\n1. Ver todos los usuarios y sus estados\n2. Agregar usuarios\n3. Mostrar detalles de un contacto\n4. Mandar mensaje a un usuario\n5. Ingresar a un room\n6. Mandar mensaje a un room\n7. Cambiar estado\n8. Desconectarse\n")
 			if opcion == "1":
-
-				self.send_presence(pstatus='available')
-				#se realiza una actualizacion de los presence
+				
 				print('Waiting for presence updates...\n')
 				await asyncio.sleep(10)
-				#aqui se procura el desplegar el roster de contatos en el server
-				#consta de varios loops que muestran los distintos detalles de los usuarios
 				print('Roster for %s' % self.boundjid.bare)
 				for i in self.roster:
 					for r in self.roster[i]:
@@ -120,7 +135,38 @@ class Client(ClientXMPP):
 					print("Mensaje enviado")
 				except:
 					print("No se ha podido mandar el mensaje")
-		#self.send_message(mto=self.recipient, mbody=self.msg)
+			
+			if opcion == "5":
+				nick = input("Ingrese su nick ")
+				room = input("Ingrese el nombre del room ")
+				self.room = room + '@muc.alumchat.xyz'
+				res = self.get_roster(self.room)
+				self.nick = nick
+				self.add_event_handler("muc::%s::got_online" % self.room,self.muc_greeting)
+				await self.get_roster()
+				self.send_presence()
+				
+				self.plugin['xep_0045'].join_muc(self.room, self.nick)
+				print("Grupo añadido con exito")
+
+			
+			if opcion == "6":
+				room = input("Ingrese el room ")
+				room = room + "@muc.alumchat.xyz"
+				msg = input("Ingrese el mensaje ")
+				self.muc_message(room, msg)
+			
+			if opcion == "7":
+				show = input("Estado: chat, away, xa, dnd...")
+				status = input("Ingrese su estado ")
+				self.send_presence(pshow=show, pstatus=status)
+				print("Correcto.")
+			
+			if opcion == "8":
+				self.disconnect()
+				break
+			else:
+				print("Seleccion incorrecta")
 
 if __name__ == '__main__':
 
@@ -139,7 +185,6 @@ if __name__ == '__main__':
 			xmpp = Client(jid, password)
 				
 			if xmpp.connect() == None:
-				f = xmpp.client_roster
 				xmpp.process()
 				
 			else:
