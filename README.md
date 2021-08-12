@@ -22,15 +22,15 @@ There, you can select an option at the main menu:
 - exit
 
 After you log in, the login menu will show up:
-1 List of all users
-2 Add users
-3 Watch a user details
-4 Communication with a user
-5 Join a room
-6 Send a message to a room
-7 Change status
-8 Disconnect
-9 Delete account
+- 1 List of all users
+- 2 Add users
+- 3 Watch a user details
+- 4 Communication with a user
+- 5 Join a room
+- 6 Send a message to a room
+- 7 Change status
+- 8 Disconnect
+- 9 Delete account
 
 # Features:
 - List of all users
