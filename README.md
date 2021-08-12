@@ -42,3 +42,8 @@ After you log in, the login menu will show up:
 - Change status
 - Disconnect
 - Delete account
+
+# References:
+- https://slixmpp.readthedocs.io/en/latest/
+- https://github.com/poezio/slixmpp
+- https://slixmpp.readthedocs.io/_/downloads/en/slix-1.7.0/pdf/
