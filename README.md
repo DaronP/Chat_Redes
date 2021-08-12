@@ -3,8 +3,8 @@ Jorge Perez - 16362
 
 # Setup:
 
-Dowload my gitub repo at https://github.com/DaronP/Chat_Redes/
-Install required libs with the following commands:
+ Dowload my gitub repo at https://github.com/DaronP/Chat_Redes/
+ Install required libs with the following commands:
 * pip install slixmpp
 * pip install asyncio
 * pip install getpass
