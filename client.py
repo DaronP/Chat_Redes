@@ -5,6 +5,8 @@ import getpass
 import asyncio
 import slixmpp
 from slixmpp.exceptions import IqError, IqTimeout
+from xml.etree import ElementTree as ET
+
 
 
 if sys.platform == 'win32':
@@ -14,7 +16,7 @@ if sys.platform == 'win32':
 class SignUp(slixmpp.ClientXMPP):
 
 	def __init__(self, jid, password):
-		slixmpp.ClientXMPP.__init__(self, jid, password)
+		ClientXMPP.__init__(self, jid, password)
 
 		self.add_event_handler("session_start", self.start)
 		self.add_event_handler("register", self.register)
@@ -33,6 +35,7 @@ class SignUp(slixmpp.ClientXMPP):
 		try:
 			await resp.send()
 			print("Account created for %s!" % self.boundjid)
+			self.disconnect()
 
 		except IqError as e:
 			print("Could not register account: %s" %
@@ -47,36 +50,39 @@ class SignUp(slixmpp.ClientXMPP):
 
 class Client(ClientXMPP):
 	def __init__(self, jid, password):
-		super().__init__(jid, password)
+		ClientXMPP.__init__(self, jid, password)
 		self.jid = jid
 		self.password = password
+
+		self.add_event_handler('session_start', self.session_start)
+		self.add_event_handler('receive_message', self.receive)
+		self.add_event_handler('muc_receive', self.muc_message)
+		self.add_event_handler('message', self.message)
+		self.add_event_handler('greeting', self.muc_greeting)
+		self.add_event_handler('unregister', self.delete_acc)
 
 		self.register_plugin('xep_0030') # Service Discovery		
 		self.register_plugin('xep_0045') # Multi-User Chat
 		self.register_plugin('xep_0004')
 		self.register_plugin('xep_0060')
 		self.register_plugin('xep_0199') # Ping
-		
-		#self.recipient = recipient
-		#self.msg = msg
-		self.add_event_handler('session_start', self.session_start)
-		self.add_event_handler('receive_message', self.receive)
-		self.add_event_handler('muc_receive', self.muc_receive)
-		self.add_event_handler('message', self.message)
-		self.add_event_handler('greeting', self.muc_greeting)
-		self.add_event_handler('muc_message', self.muc_message)
+
+		self.received = set()
+		self.presences_received = asyncio.Event()
 
 	def receive(self, msg):
 		if msg['type'] == 'chat' or msg['type'] == 'normal':
 			print("***********Mensaje Recibido**************")
 			print("De: %(from)s \n %(body)s" %(msg))
 			print("*****************************************")
-	
-	def muc_receive(self, msg):
+			msg.reply("Mensaje %(body)s enviado correctamente" % msg['body'])
+
 		if msg['type'] == 'groupchat':
 			print("***********Mensaje grupal Recibido**************")
 			print("De: %(from)s \n %(body)s" %(msg))
 			print("************************************************")
+			msg.reply("Mensaje %(body)s enviado correctamente" % msg['body'])
+
 
 	def message(self, msg):
 		if msg['type'] in ('chat', 'normal'):
@@ -91,6 +97,19 @@ class Client(ClientXMPP):
 			self.send_message(mto=room, mbody=msg, mtype='groupchat')
 		except IqError as e:
 			print("Error al mandar mensaje " ,e)
+	
+	def delete_acc(self):
+		iq_stanza = self.make_iq_set(ito='alumchat.xyz', ifrom=self.boundjid.user)
+		item = ET.fromstring("<iq type='set' id='unreg1'> \
+								<query xmlns='jabber:iq:register'> \
+									<remove/> \
+								</query> \
+								</iq>")
+		iq_stanza.append(item)
+		res = iq_stanza.send()
+		if res['type'] == 'result':
+			print("Usuario removido...")
+			sys.exit()
 
 		
 	async def session_start(self, event):
@@ -99,7 +118,7 @@ class Client(ClientXMPP):
 		
 		chat = True
 		while chat:
-			opcion = input("Menu:\n1. Ver todos los usuarios y sus estados\n2. Agregar usuarios\n3. Mostrar detalles de un contacto\n4. Mandar mensaje a un usuario\n5. Ingresar a un room\n6. Mandar mensaje a un room\n7. Cambiar estado\n8. Desconectarse\n")
+			opcion = input("Menu:\n1. Ver todos los usuarios y sus estados\n2. Agregar usuarios\n3. Mostrar detalles de un contacto\n4. Mandar mensaje a un usuario\n5. Ingresar a un room\n6. Mandar mensaje a un room\n7. Cambiar estado\n8. Desconectarse\n9. Eliminar cuenta")
 			if opcion == "1":
 				
 				print('Waiting for presence updates...\n')
@@ -121,9 +140,11 @@ class Client(ClientXMPP):
 			if opcion == "3":
 				usr = input("Ingrese el usuario ")
 				usr = usr + "@alumchat.xyz"
+				print("    status: ", self.client_roster.presence(r)[s]['status'])
 				print(self.client_roster.presence(usr))
 				y = self.client_roster
 				print(y[usr])
+				continue
 			
 			if opcion == "4":
 				para = input("Ingrese el usuario ")
@@ -135,6 +156,8 @@ class Client(ClientXMPP):
 					print("Mensaje enviado")
 				except:
 					print("No se ha podido mandar el mensaje")
+				
+				continue
 			
 			if opcion == "5":
 				nick = input("Ingrese su nick ")
@@ -142,12 +165,14 @@ class Client(ClientXMPP):
 				self.room = room + '@muc.alumchat.xyz'
 				res = self.get_roster(self.room)
 				self.nick = nick
-				self.add_event_handler("muc::%s::got_online" % self.room,self.muc_greeting)
+				
 				await self.get_roster()
 				self.send_presence()
 				
 				self.plugin['xep_0045'].join_muc(self.room, self.nick)
+				self.add_event_handler("muc::%s::got_online" % self.room,self.muc_greeting)
 				print("Grupo añadido con exito")
+				continue
 
 			
 			if opcion == "6":
@@ -155,16 +180,23 @@ class Client(ClientXMPP):
 				room = room + "@muc.alumchat.xyz"
 				msg = input("Ingrese el mensaje ")
 				self.muc_message(room, msg)
+				continue
 			
 			if opcion == "7":
 				show = input("Estado: chat, away, xa, dnd...")
 				status = input("Ingrese su estado ")
 				self.send_presence(pshow=show, pstatus=status)
 				print("Correcto.")
+				continue
 			
 			if opcion == "8":
 				self.disconnect()
 				break
+			
+			if opcion == "9":
+				self.delete_acc()
+				sys.exit()
+
 			else:
 				print("Seleccion incorrecta")
 
