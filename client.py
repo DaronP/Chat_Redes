@@ -1,3 +1,11 @@
+'''
+Universidad del Valle de Guatemala
+Redes
+Jorge Andres Perez Barrios
+Carnet: 16362
+'''
+
+
 from slixmpp import ClientXMPP, clientxmpp
 import sys
 import logging
@@ -12,7 +20,7 @@ from xml.etree import ElementTree as ET
 if sys.platform == 'win32':
 	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-
+#Clase para registro de usuarios
 class SignUp(slixmpp.ClientXMPP):
 
 	def __init__(self, jid, password):
@@ -46,9 +54,24 @@ class SignUp(slixmpp.ClientXMPP):
 			print("No response from server.")
 			self.disconnect()
 		self.disconnect()
+		sys.exit()
 
+'''
+Clase de cliente
+Contiene las funcionalidades para poder utilizar el chat
+-Ver usuarios
+-Agregar usuarios
+-Mostrar detalles de un contacto
+-Mandar mensaje a un usuario
+-Ingresar a un room
+-Mandar mensaje a un room
+-Cambiar estado
+-Desconectarse
+-Eliminar cuenta
+'''
 
 class Client(ClientXMPP):
+	#Constructor
 	def __init__(self, jid, password):
 		ClientXMPP.__init__(self, jid, password)
 		self.jid = jid
@@ -70,6 +93,7 @@ class Client(ClientXMPP):
 		self.received = set()
 		self.presences_received = asyncio.Event()
 
+	#Funcion que recibe mensajes, tanto personales como grupales
 	def receive(self, msg):
 		if msg['type'] == 'chat' or msg['type'] == 'normal':
 			print("***********Mensaje Recibido**************")
@@ -83,21 +107,24 @@ class Client(ClientXMPP):
 			print("************************************************")
 			msg.reply("Mensaje %(body)s enviado correctamente" % msg['body'])
 
-
+	#Funcion de confirmacion de envio de mensajes
 	def message(self, msg):
 		if msg['type'] in ('chat', 'normal'):
 			msg.reply("Thanks for sending\n%(body)s" % msg).send()
 
+	#Funcion de saludo al entrar a un room
 	def muc_greeting(self, presence):
 		if presence['muc']['nick'] != self.nick:
 			self.send_message(mto=presence['from'].bare, mbody="Bienvenido, %s %s" % (presence['muc']['role'], presence['muc']['nick']), mtype='groupchat')
 
+	#Funcion para enviar mensajes grupales
 	def muc_message(self, room, msg):
 		try:
 			self.send_message(mto=room, mbody=msg, mtype='groupchat')
 		except IqError as e:
 			print("Error al mandar mensaje " ,e)
 	
+	#Funcion para eliminar una cuenta
 	def delete_acc(self):
 		iq_stanza = self.make_iq_set(ito='alumchat.xyz', ifrom=self.boundjid.user)
 		item = ET.fromstring("<iq type='set' id='unreg1'> \
@@ -111,14 +138,16 @@ class Client(ClientXMPP):
 			print("Usuario removido...")
 			sys.exit()
 
-		
+	#Inicio: menu asincrono con asyncio
 	async def session_start(self, event):
 		self.send_presence()
 		await self.get_roster()
 		
 		chat = True
 		while chat:
-			opcion = input("Menu:\n1. Ver todos los usuarios y sus estados\n2. Agregar usuarios\n3. Mostrar detalles de un contacto\n4. Mandar mensaje a un usuario\n5. Ingresar a un room\n6. Mandar mensaje a un room\n7. Cambiar estado\n8. Desconectarse\n9. Eliminar cuenta")
+			opcion = input("Menu:\n1. Ver todos los usuarios y sus estados\n2. Agregar usuarios\n3. Mostrar detalles de un contacto\n4. Mandar mensaje a un usuario\n5. Ingresar a un room\n6. Mandar mensaje a un room\n7. Cambiar estado\n8. Desconectarse\n9. Eliminar cuenta\n")
+			
+			#1. Ver todos los usuarios y sus estados
 			if opcion == "1":
 				
 				print('Waiting for presence updates...\n')
@@ -130,13 +159,14 @@ class Client(ClientXMPP):
 						for s in self.client_roster.presence(r):
 							print("    status: ", self.client_roster.presence(r)[s]['status'])
 
-
+			#2. Agregar usuarios
 			if opcion == "2":
 				usr = input("Ingrese usuario ")
 				usr = usr + "@alumchat.xyz"
 				xmpp.send_presence_subscription(pto=usr)
 				print("Usuario agregado")
 
+			#3. Mostrar detalles de un contacto
 			if opcion == "3":
 				usr = input("Ingrese el usuario ")
 				usr = usr + "@alumchat.xyz"
@@ -146,6 +176,7 @@ class Client(ClientXMPP):
 				print(y[usr])
 				continue
 			
+			#4. Mandar mensaje a un usuario
 			if opcion == "4":
 				para = input("Ingrese el usuario ")
 				para = para + "@alumchat.xyz"
@@ -159,6 +190,7 @@ class Client(ClientXMPP):
 				
 				continue
 			
+			#5. Ingresar a un room
 			if opcion == "5":
 				nick = input("Ingrese su nick ")
 				room = input("Ingrese el nombre del room ")
@@ -174,7 +206,7 @@ class Client(ClientXMPP):
 				print("Grupo añadido con exito")
 				continue
 
-			
+			#6. Mandar mensaje a un room
 			if opcion == "6":
 				room = input("Ingrese el room ")
 				room = room + "@muc.alumchat.xyz"
@@ -182,6 +214,7 @@ class Client(ClientXMPP):
 				self.muc_message(room, msg)
 				continue
 			
+			#7. Cambiar estado
 			if opcion == "7":
 				show = input("Estado: chat, away, xa, dnd...")
 				status = input("Ingrese su estado ")
@@ -189,10 +222,12 @@ class Client(ClientXMPP):
 				print("Correcto.")
 				continue
 			
+			#8. Desconectarse
 			if opcion == "8":
 				self.disconnect()
-				break
+				sys.exit()
 			
+			#9. Eliminar cuenta
 			if opcion == "9":
 				self.delete_acc()
 				sys.exit()
@@ -202,9 +237,6 @@ class Client(ClientXMPP):
 
 if __name__ == '__main__':
 
-	connection = False
-	
-
 	run = True
 
 	while run:
@@ -212,7 +244,7 @@ if __name__ == '__main__':
 		if opcion == "1" or opcion == 1:
 			jid = input("Username: ")
 			jid = jid + '@alumchat.xyz'
-			password = input("Password: ")
+			password = getpass.getpass("Password: ")
 				
 			xmpp = Client(jid, password)
 				
@@ -227,16 +259,21 @@ if __name__ == '__main__':
 			jid = jid + '@alumchat.xyz'
 				
 			password = getpass.getpass("Password: ")
+			password2 = getpass.getpass("Confirm password: ")
+
+			if password == password2:
 			
-			xmpp = SignUp(jid, password)
-			xmpp.register_plugin('xep_0030') # Service Discovery
-			xmpp.register_plugin('xep_0004') # Data forms
-			xmpp.register_plugin('xep_0066') # Out-of-band Data
-			xmpp.register_plugin('xep_0077') # In-band Registration
-			xmpp['xep_0077'].force_registration = True
-			if xmpp.connect() == None:
-				xmpp.process()
-				print("Success")
+				xmpp = SignUp(jid, password)
+				xmpp.register_plugin('xep_0030') # Service Discovery
+				xmpp.register_plugin('xep_0004') # Data forms
+				xmpp.register_plugin('xep_0066') # Out-of-band Data
+				xmpp.register_plugin('xep_0077') # In-band Registration
+				xmpp['xep_0077'].force_registration = True
+				if xmpp.connect() == None:
+					xmpp.process()
+					print("Success")
+			else: 
+				print("Las contraseñas no coinciden...")
 		if opcion == 3 or opcion == "3":
 			run = False
 
